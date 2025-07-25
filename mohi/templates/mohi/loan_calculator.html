@@ -6,6 +6,7 @@
     <title>Loan Tracker - Loan Calculator</title>
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         .bg-mohi-deep-blue { background-color: #1A2A44; }
         .text-mohi-deep-blue { color: #1A2A44; }
@@ -17,11 +18,22 @@
         .text-mohi-yellow-orange { color: #F5A623; }
         .result-table { display: none; }
         .result-table.active { display: block; }
+        @media print {
+            body { -webkit-print-color-adjust: exact; }
+            .no-print { display: none; }
+        }
+        .pdf-header { position: fixed; top: 0; width: 100%; text-align: center; font-size: 14px; font-weight: bold; color: #1A2A44; padding: 5px 0; }
+        .pdf-footer { position: fixed; bottom: 0; width: 100%; text-align: center; font-size: 10px; color: #666; padding: 5px 0; }
+        #resultContainer { font-size: 10px; }
+        #resultContainer table { font-size: 10px; width: 100%; }
+        #resultContainer th, #resultContainer td { padding: 2px; }
+        #resultContainer .summary-row { background-color: #e0f7fa; font-weight: bold; }
+        .page-break { page-break-before: always; }
     </style>
 </head>
 <body class="bg-gray-100 font-sans min-h-screen">
     <div class="container mx-auto p-4">
-        <h1 class="text-3xl font-bold mb-6 text-mohi-deep-blue">Loan Calculator</h1>
+        <h1 class="text-3xl font-bold mb-6 text-mohi-deep-blue">MoHI SACCO Loan Calculator</h1>
         <form method="post" id="loanForm" class="bg-white p-6 rounded-lg shadow-lg mb-6">
             {% csrf_token %}
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -39,73 +51,7 @@
 
         {% if error %}
             <p class="text-red-500 mb-4">{{ error }}</p>
-        {% elif loan_details %}
-            <div id="resultContainer" class="bg-white p-6 rounded-lg shadow-lg">
-                <h2 class="text-xl font-semibold mb-4 text-mohi-deep-blue">Calculation Results</h2>
-                <table id="resultTable" class="result-table active w-full border-collapse">
-                    <thead>
-                        <tr class="bg-mohi-light-blue text-white">
-                            <th class="border p-2">Parameter</th>
-                            <th class="border p-2">Value ($)</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td class="border p-2">Loan Amount</td>
-                            <td class="border p-2">{{ principal }}</td>
-                        </tr>
-                        <tr>
-                            <td class="border p-2">Term (Months)</td>
-                            <td class="border p-2">{{ months }}</td>
-                        </tr>
-                        <tr>
-                            <td class="border p-2">Monthly Payment</td>
-                            <td class="border p-2">{{ loan_details.monthly_payment }}</td>
-                        </tr>
-                        <tr>
-                            <td class="border p-2">Total Interest</td>
-                            <td class="border p-2">{{ loan_details.total_interest }}</td>
-                        </tr>
-                        <tr>
-                            <td class="border p-2">Total Paid</td>
-                            <td class="border p-2">{{ loan_details.total_paid }}</td>
-                        </tr>
-                    </tbody>
-                </table>
-                <button id="printPDF" class="bg-mohi-yellow-orange text-white p-2 rounded mt-4 hover:bg-mohi-light-blue transition duration-200">Print to PDF</button>
-
-                <h3 class="text-lg font-semibold mt-6 mb-2 text-mohi-deep-blue">Amortization Schedule</h3>
-                <table class="w-full border-collapse mt-2">
-                    <thead>
-                        <tr class="bg-mohi-light-blue text-white">
-                            <th class="border p-2">Month</th>
-                            <th class="border p-2">Payment ($)</th>
-                            <th class="border p-2">Interest ($)</th>
-                            <th class="border p-2">Principal ($)</th>
-                            <th class="border p-2">Balance ($)</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for item in loan_details.schedule %}
-                            <tr>
-                                <td class="border p-2">{{ item.month }}</td>
-                                <td class="border p-2">{{ item.payment }}</td>
-                                <td class="border p-2">{{ item.interest }}</td>
-                                <td class="border p-2">{{ item.principal }}</td>
-                                <td class="border p-2">{{ item.balance }}</td>
-                            </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
         {% endif %}
-
-        <script>
-            document.getElementById('printPDF').addEventListener('click', function() {
-                const element = document.getElementById('resultContainer');
-                html2pdf().from(element).save('loan_calculation.pdf');
-            });
-        </script>
     </div>
 </body>
 </html>

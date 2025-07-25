@@ -1,32 +1,78 @@
-{% extends 'mohi/base.html' %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Loan Tracker - Login</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden; /* Prevents scrolling beyond the viewport */
+        }
+        .bg-mohi-deep-blue { background-color: #1A2A44; }
+        .text-mohi-deep-blue { color: #1A2A44; }
+        .bg-mohi-light-blue { background-color: #4A90E2; }
+        .text-mohi-light-blue { color: #4A90E2; }
+        .bg-mohi-green { background-color: #00C853; }
+        .text-mohi-green { color: #00C853; }
+        .bg-mohi-yellow-orange { background-color: #F5A623; }
+        .text-mohi-yellow-orange { color: #F5A623; }
+        .full-page {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        @media (max-width: 768px) {
+            .hidden-mobile { display: none; }
+            .mobile-link { display: block; text-align: center; margin-bottom: 1rem; }
+        }
+    </style>
+</head>
+<body class="full-page bg-gray-100">
+    <div class="flex flex-1">
+        <!-- Left Side (Image and Link) - Hidden on Mobile -->
+        <div class="hidden-mobile w-1/2 bg-cover bg-center" style="background-image: url('https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?ixlib=rb-4.0.3&auto=format&fit=crop&w=1350&q=80');">
+            <div class="h-full flex items-center justify-center bg-black bg-opacity-50">
+                <a href="{% url 'loan_calculator' %}" class="text-white text-2xl font-bold hover:underline">Use Calculator</a>
+            </div>
+        </div>
 
-{% block content %}
-<div class="min-h-screen bg-gray-100 flex items-center justify-center p-4">
-    <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
-        <h1 class="text-2xl font-bold mb-4 text-mohi-deep-blue">Login</h1>
-        {% if error %}
-            <p class="text-red-500 mb-4">{{ error }}</p>
-        {% endif %}
-        <form method="post">
-            {% csrf_token %}
-            <div class="mb-4">
-                <label for="id_username" class="block text-gray-700 text-sm font-medium">Email</label>
-                <input type="email" name="username" id="id_username" class="w-full p-2 border rounded mt-1" required>
+        <!-- Right Side (Form) -->
+        <div class="w-full md:w-1/2 bg-white p-8 rounded-lg shadow-lg flex items-center justify-center">
+            <div class="w-full max-w-md">
+                <div class="mobile-link md:hidden">
+                    <a href="{% url 'loan_calculator' %}" class="text-mohi-light-blue text-lg hover:underline">Use Calculator</a>
+                </div>
+                <h1 class="text-2xl font-bold mb-6 text-mohi-deep-blue">Login</h1>
+                {% if error %}
+                    <p class="text-red-500 mb-4">{{ error }}</p>
+                {% endif %}
+                <form method="post" class="space-y-4">
+                    {% csrf_token %}
+                    <div>
+                        <label for="id_username" class="block text-gray-700 text-sm font-medium">Email</label>
+                        <input type="email" name="username" id="id_username" class="w-full p-2 border rounded mt-1" required>
+                    </div>
+                    <div>
+                        <label for="id_password" class="block text-gray-700 text-sm font-medium">Password</label>
+                        <input type="password" name="password" id="id_password" class="w-full p-2 border rounded mt-1" required>
+                    </div>
+                    <button type="submit" class="bg-mohi-green text-white p-2 rounded w-full hover:bg-mohi-light-blue transition duration-200">Login</button>
+                </form>
+                <p class="mt-4 text-center text-gray-600 text-sm">
+                    Don't have an account? 
+                    {% if user.is_authenticated and user.is_staff %}
+                        <a href="{% url 'register' %}" class="text-mohi-light-blue hover:underline">Register a new user</a>
+                    {% else %}
+                        <span class="text-gray-500">Contact an admin to register.</span>
+                    {% endif %}
+                </p>
             </div>
-            <div class="mb-4">
-                <label for="id_password" class="block text-gray-700 text-sm font-medium">Password</label>
-                <input type="password" name="password" id="id_password" class="w-full p-2 border rounded mt-1" required>
-            </div>
-            <button type="submit" class="bg-mohi-green text-white p-2 rounded w-full hover:bg-mohi-light-blue transition duration-200">Login</button>
-        </form>
-        <p class="mt-4 text-center text-gray-600 text-sm">
-            Don't have an account? 
-            {% if user.is_authenticated and user.is_staff %}
-                <a href="{% url 'register' %}" class="text-mohi-light-blue hover:underline">Register a new user</a>
-            {% else %}
-                <span class="text-gray-500">Contact an admin to register.</span>
-            {% endif %}
-        </p>
+        </div>
     </div>
-</div>
-{% endblock %}
+</body>
+</html>

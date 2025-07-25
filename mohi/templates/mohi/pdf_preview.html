@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Loan Tracker - PDF Preview</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        .bg-mohi-deep-blue { background-color: #1A2A44; }
+        .text-mohi-deep-blue { color: #1A2A44; }
+        .bg-mohi-light-blue { background-color: #4A90E2; }
+        .text-mohi-light-blue { color: #4A90E2; }
+        .bg-mohi-green { background-color: #00C853; }
+        .text-mohi-green { color: #00C853; }
+        .bg-mohi-black { background-color: #000000; }
+        .text-mohi-yellow-orange { color: #F5A623; }
+        .bg-mohi-sacco { background-color: #FFD700; }
+        @media print {
+            body { -webkit-print-color-adjust: exact; }
+            .no-print { display: none; }
+        }
+        #resultContainer { font-size: 10px; }
+        #resultContainer table { 
+            font-size: 10px; 
+            width: 100%; 
+            border: 2px solid #000; /* Black border around the table */
+        }
+        #resultContainer th, #resultContainer td { padding: 2px; }
+        #resultContainer .summary-row { background-color: #e0f7fa; font-weight: bold; }
+        .empty-row { height: 10px; }
+        .sacco-row { font-weight: bold; text-align: center; }
+        #pdfContent { margin-top: 0; padding-top: 10px; } /* Header padding added */
+    </style>
+</head>
+<body class="bg-white font-sans min-h-screen">
+    <div class="container mx-auto">
+        <div id="resultContainer">
+            <div class="mt-4 no-print">
+                <button id="printPDF" class="bg-mohi-black text-white p-2 rounded mr-2 hover:bg-mohi-light-blue transition duration-200">Download PDF</button>
+                <a href="{% url 'loan_calculator' %}" class="bg-mohi-green text-white p-2 rounded hover:bg-mohi-light-blue transition duration-200 text-center inline-block">Back to Calculator</a>
+            </div>
+            <div id="pdfContent">
+                <table class="w-full border-collapse">
+                    <thead>
+                        <tr class="sacco-row">
+                            <th colspan="6" class="border p-2" style="font-size: 28px;">MoHI Sacco Loan summary</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                   <tr class="summary-row">
+                            <td class="p-2" >Category</td>
+                            <td class="p-2" >Value (ksh)</td>
+                        </tr>
+                        <tr class="summary-row">
+                            <td class="p-2" >Loan Amount</td>
+                            <td class="p-2" >{{ principal }}</td>
+                        </tr>
+                        <tr class="summary-row">
+                            <td class="p-2" >Term (Months)</td>
+                            <td class="p-2" >{{ months }}</td>
+                        </tr>
+                        <tr class="summary-row">
+                            <td class="p-2" >Monthly Payment</td>
+                            <td class="p-2" >{{ monthly_payment }}</td>
+                        </tr>
+                        <tr class="summary-row">
+                            <td class="p-2" >Total Interest</td>
+                            <td class="p-2" >{{ total_interest }}</td>
+                        </tr>
+                        <tr class="summary-row">
+                            <td class="p-2" >Total Paid</td>
+                            <td class="p-2" >{{ total_paid }}</td>
+                        </tr>
+                        <tr class="empty-row"><td colspan="5"></td></tr>
+                        <tr class="bg-mohi-black text-white">
+                            <th class="border p-2">Month</th>
+                            <th class="border p-2">Date of Payment</th>
+                            <th class="border p-2">Payment (ksh)</th>
+                            <th class="border p-2">Interest (ksh)</th>
+                            <th class="border p-2">Principal (ksh)</th>
+                            <th class="border p-2">Balance (ksh)</th>
+                        </tr>
+                        {% for item in schedule %}
+                            <tr>
+                                <td class="border p-2">{{ item.month }}</td>
+                                <td class="border p-2">{{ item.date|date:"d-m-Y" }}</td>
+                                <td class="border p-2">{{ item.payment }}</td>
+                                <td class="border p-2">{{ item.interest }}</td>
+                                <td class="border p-2">{{ item.principal }}</td>
+                                <td class="border p-2">{{ item.balance }}</td>
+                            </tr>
+                        {% endfor %}
+                        <tr class="empty-row"><td colspan="6"></td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <script>
+            document.getElementById('printPDF').addEventListener('click', function() {
+                const element = document.getElementById('pdfContent');
+                html2pdf().from(element).set({
+                    margin: [0, 0.5, 0.5, 0.5], /* Remove top margin, keep others */
+                    filename: 'loan_summary.pdf',
+                    html2canvas: { scale: 2, useCORS: true, windowWidth: document.body.scrollWidth },
+                    jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait', putOnlyUsedFonts: true, floatPrecision: 16 },
+                    pagebreak: { mode: ['css', 'legacy'], avoid: ['tr'] }
+                }).toPdf().get('pdf').then(function(pdf) {
+                    pdf.save();
+                });
+            });
+        </script>
+    </div>
+</body>
+</html>

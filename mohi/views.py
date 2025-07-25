@@ -8,6 +8,8 @@ from django.utils import timezone
 from datetime import timedelta
 from .decorators import is_staff_required
 from .models import CustomUser, Loan, Repayment
+from datetime import datetime as dt
+
 
 def home(request):
     return render(request, 'mohi/home.html')
@@ -241,12 +243,51 @@ def loan_calculator(request):
             months = int(request.POST.get('loanTerm'))
             monthly_rate = 1.0  # Fixed 1% monthly interest rate
             loan_details = calculate_loan(principal, monthly_rate, months)
-            return render(request, 'mohi/loan_calculator.html', {
-                'loan_details': loan_details,
-                'principal': principal,
-                'months': months,
-                'monthly_rate': monthly_rate
-            })
+            timestamp = timezone.now()
+            # Redirect with query parameters instead of keyword arguments
+            query_params = f"?principal={principal}&months={months}&monthly_payment={loan_details['monthly_payment']}&total_interest={loan_details['total_interest']}&total_paid={loan_details['total_paid']}&schedule={str(loan_details['schedule']).replace(' ', '')}&timestamp={timestamp.isoformat()}"
+            return redirect(f"/pdf_preview/{query_params}")
         except ValueError as e:
             return render(request, 'mohi/loan_calculator.html', {'error': str(e)})
     return render(request, 'mohi/loan_calculator.html')
+
+
+
+from datetime import timedelta
+import datetime
+
+def pdf_preview(request):
+    try:
+        principal = float(request.GET.get('principal'))
+        months = int(request.GET.get('months'))
+        monthly_payment = float(request.GET.get('monthly_payment'))
+        total_interest = float(request.GET.get('total_interest'))
+        total_paid = float(request.GET.get('total_paid'))
+        schedule_data = eval(request.GET.get('schedule'))
+        timestamp_str = request.GET.get('timestamp')
+        
+        # Convert timestamp to date only, fixing ISO format
+        if ' ' in timestamp_str:
+            timestamp_str = timestamp_str.replace(' ', '+')
+        base_date = dt.fromisoformat(timestamp_str).date()
+        
+        # Generate payment dates using timedelta (approximate)
+        schedule_with_dates = []
+        for i, item in enumerate(schedule_data, 1):
+            new_item = item.copy()
+            new_item['date'] = base_date + timedelta(days=30 * (i - 1))
+            schedule_with_dates.append(new_item)
+        
+        context = {
+            'principal': principal,
+            'months': months,
+            'monthly_payment': monthly_payment,
+            'total_interest': total_interest,
+            'total_paid': total_paid,
+            'schedule': schedule_with_dates,
+            'timestamp': base_date
+        }
+        return render(request, 'mohi/pdf_preview.html', context)
+    except (ValueError, TypeError) as e:
+        print(f"{e}")
+      
