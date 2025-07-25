@@ -1,0 +1,18 @@
+{% extends 'mohi/base.html' %}
+
+{% block content %}
+<div class="container mx-auto p-4 max-w-md">
+    <h1 class="text-2xl font-bold mb-4 text-mohi-deep-blue">Make Repayment for Loan #{{ loan.id }}</h1>
+    {% if error %}
+        <p class="text-red-500">{{ error }}</p>
+    {% endif %}
+    <form method="post">
+        {% csrf_token %}
+        <div class="mb-4">
+            <label for="amount" class="block text-gray-700">Repayment Amount ($)</label>
+            <input type="number" id="amount" name="amount" class="w-full p-2 border rounded" step="0.01" required>
+        </div>
+        <button type="submit" class="bg-mohi-green text-white p-2 rounded hover:bg-mohi-light-blue">Make Repayment</button>
+    </form>
+</div>
+{% endblock %}

@@ -1,0 +1,26 @@
+{% extends 'mohi/base.html' %}
+
+{% block content %}
+<div class="container mx-auto p-4">
+    <h1 class="text-2xl font-bold mb-4 text-mohi-deep-blue">Your Loans</h1>
+    <ul>
+        {% for loan in loans %}
+        <li class="mb-2">
+            <div class="bg-white p-4 rounded shadow">
+                <p class="text-gray-700">Loan Amount: ${{ loan.amount }}</p>
+                <p class="text-gray-700">Term: {{ loan.term_months }} months</p>
+                <p class="text-gray-700">Start Date: {{ loan.start_date }}</p>
+                <p class="text-gray-700">Balance: ${{ loan.balance }}</p>
+                <p class="text-gray-700">Status: {% if loan.is_paid %}Paid{% else %}Active{% endif %}</p>
+                <a href="{% url 'loan_detail' loan.id %}" class="text-mohi-light-blue hover:underline">View Details</a>
+                {% if not loan.is_paid %}
+                <a href="{% url 'make_repayment' loan.id %}" class="ml-4 text-mohi-green hover:underline">Make Repayment</a>
+                {% endif %}
+            </div>
+        </li>
+        {% empty %}
+        <p class="text-gray-700">No loans found.</p>
+        {% endfor %}
+    </ul>
+</div>
+{% endblock %}

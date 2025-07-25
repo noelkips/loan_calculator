@@ -1,0 +1,38 @@
+{% extends 'mohi/base.html' %}
+
+{% block content %}
+<div class="container mx-auto p-4 max-w-md">
+    <h1 class="text-2xl font-bold mb-4 text-mohi-deep-blue">Register Staff</h1>
+    {% if error %}
+        <p class="text-red-500">{{ error }}</p>
+    {% endif %}
+    <form method="post">
+        {% csrf_token %}
+        <div class="mb-4">
+            <label for="first_name" class="block text-gray-700">First Name</label>
+            <input type="text" id="first_name" name="first_name" class="w-full p-2 border rounded" required>
+        </div>
+        <div class="mb-4">
+            <label for="last_name" class="block text-gray-700">Last Name</label>
+            <input type="text" id="last_name" name="last_name" class="w-full p-2 border rounded" required>
+        </div>
+        <div class="mb-4">
+            <label for="email" class="block text-gray-700">Email</label>
+            <input type="email" id="email" name="email" class="w-full p-2 border rounded" required>
+        </div>
+        <div class="mb-4">
+            <label for="department" class="block text-gray-700">Department</label>
+            <input type="text" id="department" name="department" class="w-full p-2 border rounded" required>
+        </div>
+        <div class="mb-4">
+            <label for="designation" class="block text-gray-700">Designation</label>
+            <input type="text" id="designation" name="designation" class="w-full p-2 border rounded" required>
+        </div>
+        <div class="mb-4">
+            <label for="password" class="block text-gray-700">Password</label>
+            <input type="password" id="password" name="password" class="w-full p-2 border rounded" required>
+        </div>
+        <button type="submit" class="bg-mohi-green text-white p-2 rounded hover:bg-mohi-light-blue">Register</button>
+    </form>
+</div>
+{% endblock %}

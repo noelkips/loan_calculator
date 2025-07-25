@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Loan Tracker - {% block title %}Welcome{% endblock %}</title>
+    {% load static %}
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        .bg-mohi-deep-blue { background-color: #1A2A44; }
+        .text-mohi-deep-blue { color: #1A2A44; }
+        .bg-mohi-light-blue { background-color: #4A90E2; }
+        .text-mohi-light-blue { color: #4A90E2; }
+        .bg-mohi-green { background-color: #00C853; }
+        .text-mohi-green { color: #00C853; }
+        .bg-mohi-yellow-orange { background-color: #F5A623; }
+        .text-mohi-yellow-orange { color: #F5A623; }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans">
+    <!-- Header -->
+    <header class="bg-mohi-deep-blue text-white p-4">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-bold">Loan Tracker</h1>
+            <nav class="space-x-4">
+                {% if user.is_authenticated %}
+                    <a href="{% url 'loan_list' %}" class="hover:text-mohi-light-blue">My Loans</a>
+                    <a href="{% url 'apply_loan' %}" class="hover:text-mohi-light-blue">Apply Loan</a>
+                    <a href="{% url 'loan_calculator' %}" class="hover:text-mohi-light-blue">Loan Calculator</a>
+                    {% if user.is_staff %}
+                        <a href="{% url 'register' %}" class="hover:text-mohi-light-blue">Register User</a>
+                        <a href="{% url 'loan_report' %}" class="hover:text-mohi-light-blue">Report</a>
+                    {% endif %}
+                    <a href="{% url 'logout' %}" class="hover:text-mohi-light-blue">Logout</a>
+                {% else %}
+                    <a href="{% url 'login' %}" class="hover:text-mohi-light-blue">Login</a>
+                {% endif %}
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container mx-auto p-4 min-h-screen">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-mohi-deep-blue text-white p-4 mt-4">
+        <div class="container mx-auto text-center">
+            <p>© 2025 Missions of Hope International. All rights reserved.</p>
+            <p>Contact: support@loantracker.com | Phone: +254-123-456-789</p>
+        </div>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+    .bg-mohi-deep-blue {
+        background-color: #1A2A44;
+    }
+    .text-mohi-deep-blue {
+        color: #1A2A44;
+    }
+    .bg-mohi-light-blue {
+        background-color: #4A90E2;
+    }
+    .text-mohi-light-blue {
+        color: #4A90E2;
+    }
+    .bg-mohi-green {
+        background-color: #00C853;
+    }
+    .text-mohi-green {
+        color: #00C853;
+    }
+    .bg-mohi-yellow-orange {
+        background-color: #F5A623;
+    }
+    .text-mohi-yellow-orange {
+        color: #F5A623;
+    }
+}
