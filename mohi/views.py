@@ -9,27 +9,27 @@ from datetime import timedelta
 from .decorators import is_staff_required
 from .models import CustomUser, Loan, Repayment
 from datetime import datetime as dt
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib.auth import login, authenticate, logout
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth.hashers import make_password
+from django.db import transaction
+from django.db.models import Sum
+from django.utils import timezone
+from datetime import timedelta
+from .decorators import is_staff_required
+from .models import CustomUser, Loan, Repayment
+import logging
+import json
+from django.http import JsonResponse, HttpResponse
+from django.views.decorators.csrf import csrf_exempt
+import subprocess
+import os
+from django.conf import settings
 
 
 def home(request):
     return render(request, 'mohi/home.html')
-
-
-def login_view(request):
-    if request.method == 'POST':
-        email = request.POST.get('username')
-        password = request.POST.get('password')
-        user = authenticate(request, username=email, password=password)
-        if user is not None:
-            login(request, user)
-            return redirect('/')
-        else:
-            return render(request, 'mohi/login.html', {'error': 'Invalid email or password.'})
-    return render(request, 'mohi/login.html')
-
-def logout_view(request):
-    logout(request)
-    return redirect('/')
 
 @is_staff_required
 def register(request):
@@ -67,8 +67,6 @@ def apply_loan(request):
     if request.method == 'POST':
         amount = request.POST.get('amount')
         term_months = request.POST.get('term_months')
-        user = request.user
-
         try:
             amount = float(amount)
             term_months = int(term_months)
@@ -76,6 +74,12 @@ def apply_loan(request):
                 raise ValueError
         except ValueError:
             return render(request, 'mohi/loan_apply.html', {'error': 'Invalid amount or term.'})
+
+        if request.user.is_staff:
+            user_id = request.POST.get('user_id')
+            user = get_object_or_404(CustomUser, id=user_id)
+        else:
+            user = request.user
 
         start_date = timezone.now().date()
         end_date = start_date + timedelta(days=30 * term_months)
@@ -93,23 +97,67 @@ def apply_loan(request):
 
         return redirect('loan_list')
 
-    return render(request, 'mohi/loan_apply.html')
+    users = CustomUser.objects.all() if request.user.is_staff else None
+    return render(request, 'mohi/loan_apply.html', {'users': users})
+
+
+@is_staff_required
+def issue_loan(request):
+    if request.method == 'POST':
+        amount = request.POST.get('amount')
+        term_months = request.POST.get('term_months')
+        try:
+            amount = float(amount)
+            term_months = int(term_months)
+            if amount <= 0 or term_months <= 0:
+                raise ValueError
+        except ValueError:
+            return render(request, 'mohi/issue_loan.html', {'error': 'Invalid amount or term.', 'users': CustomUser.objects.all()})
+
+        user_id = request.POST.get('user_id')
+        user = get_object_or_404(CustomUser, id=user_id)
+
+        start_date = timezone.now().date()
+        end_date = start_date + timedelta(days=30 * term_months)
+
+        loan = Loan.objects.create(
+            user=user,
+            amount=amount,
+            term_months=term_months,
+            start_date=start_date,
+            end_date=end_date,
+            balance=amount,
+            is_paid=False
+        )
+        loan.save()
+
+        return redirect('loan_list')
+
+    users = CustomUser.objects.all()
+    return render(request, 'mohi/issue_loan.html', {'users': users})
 
 @login_required
 def loan_list(request):
-    loans = Loan.objects.filter(user=request.user)
+    if request.user.is_staff:
+        loans = Loan.objects.all()
+    else:
+        loans = Loan.objects.filter(user=request.user)
     return render(request, 'mohi/loan_list.html', {'loans': loans})
 
 @login_required
 def loan_detail(request, loan_id):
-    loan = get_object_or_404(Loan, id=loan_id, user=request.user)
+    loan = get_object_or_404(Loan, id=loan_id)
+    if not request.user.is_staff and loan.user != request.user:
+        return redirect('loan_list')
     schedule = loan.generate_amortization_schedule()
     repayments = Repayment.objects.filter(loan=loan)
     return render(request, 'mohi/loan_detail.html', {'loan': loan, 'schedule': schedule, 'repayments': repayments})
 
 @login_required
 def make_repayment(request, loan_id):
-    loan = get_object_or_404(Loan, id=loan_id, user=request.user)
+    loan = get_object_or_404(Loan, id=loan_id)
+    if not request.user.is_staff and loan.user != request.user:
+        return redirect('loan_list')
     if request.method == 'POST':
         amount = request.POST.get('amount')
         try:
@@ -152,9 +200,27 @@ def make_repayment(request, loan_id):
 def loan_report(request):
     total_loans = Loan.objects.aggregate(total=Sum('amount'))['total'] or 0
     total_repayments = Repayment.objects.aggregate(total=Sum('amount'))['total'] or 0
-    return render(request, 'mohi/loan_report.html', {'total_loans': total_loans, 'total_repayments': total_repayments})
+    loans = Loan.objects.all()
+    return render(request, 'mohi/loan_report.html', {'total_loans': total_loans, 'total_repayments': total_repayments, 'loans': loans})
+def login_view(request):
+    if request.method == 'POST':
+        email = request.POST.get('username')
+        password = request.POST.get('password')
+        print(f"Attempting login for email: {email}")
+        user = authenticate(request, username=email, password=password)
+        print(f"Authenticate returned: {user}")
+        if user is not None:
+            print("Login successful")
+            login(request, user)
+            return redirect('home')
+        else:
+            print("Login failed")
+            return render(request, 'mohi/login.html', {'error': 'Invalid email or password.'})
+    return render(request, 'mohi/login.html')
 
-
+def logout_view(request):
+    logout(request)
+    return redirect('/')
 
 
 def calculate_loan(principal, monthly_rate, months):
@@ -291,3 +357,135 @@ def pdf_preview(request):
     except (ValueError, TypeError) as e:
         print(f"{e}")
       
+
+
+
+@csrf_exempt
+def generate_pdf(request):
+    if request.method == 'POST':
+        data = json.loads(request.body)
+        loan = data['loan']
+        schedule = loan['schedule']
+        repayments = data['repayments']
+
+        # Generate LaTeX content
+        latex_content = r"""
+\documentclass[a4paper,12pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{geometry}
+\geometry{margin=1in}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{times} % Reliable font package
+
+% Begin document
+\begin{document}
+
+% Title and User Information
+\begin{center}
+    \textbf{Payment Schedule - Loan \#%d}
+    \vspace{0.5cm}
+\end{center}
+
+% User Information
+\section*{User Information}
+\begin{itemize}
+    \item Email: %s
+    \item Name: %s
+    \item Department: %s
+    \item Designation: %s
+\end{itemize}
+
+% Loan Summary
+\section*{Loan Summary}
+\begin{itemize}
+    \item Amount: KSH %.2f
+    \item Term: %d months
+    \item Start Date: %s
+    \item Balance: KSH %.2f
+    \item Status: %s
+\end{itemize}
+
+% Payment Schedule Table
+\section*{Payment Schedule}
+\begin{table}[h]
+    \centering
+    \begin{tabular}{cccccc}
+        \toprule
+        Month & Date & Payment (KSH) & Interest (KSH) & Principal (KSH) & Balance (KSH) \\
+        \midrule
+        """ % (
+            loan['id'],
+            loan['user']['email'],
+            loan['user']['name'],
+            loan['user']['department'],
+            loan['user']['designation'],
+            loan['amount'],
+            loan['term_months'],
+            loan['start_date'],
+            loan['balance'],
+            loan['status']
+        )
+
+        for item in schedule:
+            latex_content += r"%d & %s & %.2f & %.2f & %.2f & %.2f \\" % (
+                item['month'],
+                item['date'],
+                item['payment'],
+                item['interest'],
+                item['principal'],
+                item['balance']
+            )
+
+        latex_content += r"""
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+% Repayments Table
+\section*{Repayments}
+\begin{table}[h]
+    \centering
+    \begin{tabular}{cccc}
+        \toprule
+        Date & Amount (KSH) & Principal (KSH) & Interest (KSH) \\
+        \midrule
+        """
+
+        for repayment in repayments:
+            latex_content += r"%s & %.2f & %.2f & %.2f \\" % (
+                repayment.date,
+                repayment.amount * 130,
+                repayment.principal * 130,
+                repayment.interest * 130
+            )
+
+        latex_content += r"""
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+\end{document}
+"""
+
+        # Write LaTeX to temporary file
+        tex_file = os.path.join(settings.MEDIA_ROOT, 'temp_payment_schedule.tex')
+        with open(tex_file, 'w') as f:
+            f.write(latex_content)
+
+        # Compile LaTeX to PDF
+        pdf_file = os.path.join(settings.MEDIA_ROOT, 'temp_payment_schedule.pdf')
+        subprocess.run(['latexmk', '-pdf', tex_file], cwd=settings.MEDIA_ROOT, check=True)
+
+        # Return PDF as response
+        with open(pdf_file, 'rb') as f:
+            response = HttpResponse(f.read(), content_type='application/pdf')
+            response['Content-Disposition'] = f'attachment; filename=Payment_Schedule_Loan_{loan["id"]}.pdf'
+            return response
+
+        # Clean up
+        os.remove(tex_file)
+        os.remove(pdf_file)
+    return JsonResponse({'error': 'Invalid request'}, status=400)

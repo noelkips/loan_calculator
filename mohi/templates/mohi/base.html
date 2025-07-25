@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Loan Tracker - {% block title %}Welcome{% endblock %}</title>
+    <title>Loan Tracker</title>
     {% load static %}
     <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
     <style>
@@ -17,39 +17,70 @@
         .text-mohi-yellow-orange { color: #F5A623; }
     </style>
 </head>
-<body class="bg-gray-100 font-sans">
+<body class="bg-gray-100 flex flex-col min-h-screen">
     <!-- Header -->
-    <header class="bg-mohi-deep-blue text-white p-4">
-        <div class="container mx-auto flex justify-between items-center">
-            <h1 class="text-2xl font-bold">Loan Tracker</h1>
-            <nav class="space-x-4">
-                {% if user.is_authenticated %}
-                    <a href="{% url 'loan_list' %}" class="hover:text-mohi-light-blue">My Loans</a>
-                    <a href="{% url 'apply_loan' %}" class="hover:text-mohi-light-blue">Apply Loan</a>
-                    <a href="{% url 'loan_calculator' %}" class="hover:text-mohi-light-blue">Loan Calculator</a>
-                    {% if user.is_staff %}
-                        <a href="{% url 'register' %}" class="hover:text-mohi-light-blue">Register User</a>
-                        <a href="{% url 'loan_report' %}" class="hover:text-mohi-light-blue">Report</a>
+    <header class="bg-mohi-deep-blue text-white sticky top-0 z-50 shadow-md">
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+            <a href="{% url 'home' %}" class="text-2xl font-bold text-mohi-light-blue hover:text-white transition duration-200">Loan Tracker</a>
+            <nav class="flex items-center space-x-4">
+                <!-- Mobile Menu Button -->
+                <button id="menu-toggle" class="md:hidden text-white focus:outline-none">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7"></path>
+                    </svg>
+                </button>
+                <!-- Navigation Links -->
+                <div id="nav-links" class="hidden md:flex md:items-center md:space-x-4">
+                    {% if user.is_authenticated %}
+                        <a href="{% url 'loan_list' %}" class="hover:text-mohi-light-blue transition duration-200">My Loans</a>
+                        {% if user.is_staff %}
+                            <a href="{% url 'issue_loan' %}" class="hover:text-mohi-light-blue transition duration-200">Issue Loan</a>
+                            <a href="{% url 'register' %}" class="hover:text-mohi-light-blue transition duration-200">Register User</a>
+                            <a href="{% url 'loan_report' %}" class="hover:text-mohi-light-blue transition duration-200">Report</a>
+                        {% endif %}
+                        <a href="{% url 'logout' %}" class="hover:text-mohi-light-blue transition duration-200">Logout</a>
+                    {% else %}
+                        <a href="{% url 'login' %}" class="hover:text-mohi-light-blue transition duration-200">Login</a>
                     {% endif %}
-                    <a href="{% url 'logout' %}" class="hover:text-mohi-light-blue">Logout</a>
-                {% else %}
-                    <a href="{% url 'login' %}" class="hover:text-mohi-light-blue">Login</a>
-                {% endif %}
+                </div>
             </nav>
+        </div>
+        <!-- Mobile Menu -->
+        <div id="mobile-menu" class="md:hidden hidden bg-mohi-deep-blue text-white px-4 py-2">
+            {% if user.is_authenticated %}
+                <a href="{% url 'loan_list' %}" class="block py-2 hover:text-mohi-light-blue transition duration-200">My Loans</a>
+                {% if user.is_staff %}
+                    <a href="{% url 'issue_loan' %}" class="block py-2 hover:text-mohi-light-blue transition duration-200">Issue Loan</a>
+                    <a href="{% url 'register' %}" class="block py-2 hover:text-mohi-light-blue transition duration-200">Register User</a>
+                    <a href="{% url 'loan_report' %}" class="block py-2 hover:text-mohi-light-blue transition duration-200">Report</a>
+                {% endif %}
+                <a href="{% url 'logout' %}" class="block py-2 hover:text-mohi-light-blue transition duration-200">Logout</a>
+            {% else %}
+                <a href="{% url 'login' %}" class="block py-2 hover:text-mohi-light-blue transition duration-200">Login</a>
+            {% endif %}
         </div>
     </header>
 
     <!-- Main Content -->
-    <main class="container mx-auto p-4 min-h-screen">
-        {% block content %}{% endblock %}
+    <main class="flex-1 container mx-auto mt-4 p-4">
+        {% block content %}
+        {% endblock %}
     </main>
 
     <!-- Footer -->
-    <footer class="bg-mohi-deep-blue text-white p-4 mt-4">
-        <div class="container mx-auto text-center">
+    <footer class="bg-mohi-deep-blue text-white py-4 mt-auto">
+        <div class="container mx-auto px-4 text-center">
             <p>© 2025 Missions of Hope International. All rights reserved.</p>
-            <p>Contact: support@loantracker.com | Phone: +254-123-456-789</p>
+            <p class="mt-2"><a href="mailto:support@loantracker.com" class="text-mohi-light-blue hover:underline">support@loantracker.com</a> | Phone: +254-123-456-789</p>
         </div>
     </footer>
+
+    <!-- JavaScript for Mobile Menu Toggle -->
+    <script>
+        document.getElementById('menu-toggle').addEventListener('click', function() {
+            const mobileMenu = document.getElementById('mobile-menu');
+            mobileMenu.classList.toggle('hidden');
+        });
+    </script>
 </body>
 </html>

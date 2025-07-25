@@ -63,14 +63,7 @@
                     </div>
                     <button type="submit" class="bg-mohi-green text-white p-2 rounded w-full hover:bg-mohi-light-blue transition duration-200">Login</button>
                 </form>
-                <p class="mt-4 text-center text-gray-600 text-sm">
-                    Don't have an account? 
-                    {% if user.is_authenticated and user.is_staff %}
-                        <a href="{% url 'register' %}" class="text-mohi-light-blue hover:underline">Register a new user</a>
-                    {% else %}
-                        <span class="text-gray-500">Contact an admin to register.</span>
-                    {% endif %}
-                </p>
+               
             </div>
         </div>
     </div>

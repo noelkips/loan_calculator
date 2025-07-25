@@ -37,6 +37,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'mohi',
+    'mathfilters',
 ]
 
 AUTH_USER_MODEL = 'mohi.CustomUser'

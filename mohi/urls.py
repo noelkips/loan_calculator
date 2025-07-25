@@ -13,6 +13,8 @@ urlpatterns = [
     
     path('logout/', views.logout_view, name='logout'),
     path('loan_calculator/', views.loan_calculator, name='loan_calculator'),
+    path('issue_loan/', views.issue_loan, name='issue_loan'),
     path('pdf_preview/', views.pdf_preview, name='pdf_preview'),
+    path('generate-pdf/', views.generate_pdf, name='generate_pdf'),
     
 ]

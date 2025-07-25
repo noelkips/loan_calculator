@@ -2,6 +2,8 @@ from django.contrib.auth.base_user import BaseUserManager
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.utils.translation import gettext_lazy as _
+from decimal import Decimal
+from datetime import timedelta
 
 class CustomUserManager(BaseUserManager):
     def create_user(self, email, first_name, last_name, department, designation, password=None, **extra_fields):
@@ -51,7 +53,7 @@ class CustomUser(AbstractUser):
         return self.email
 
 class Loan(models.Model):
-    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='loans')
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     interest_rate = models.DecimalField(max_digits=5, decimal_places=2, default=1.0)  # 1% monthly
     term_months = models.PositiveIntegerField()
@@ -64,7 +66,6 @@ class Loan(models.Model):
         return f"Loan for {self.user.email} - {self.amount}"
 
     def calculate_monthly_payment(self):
-        """Calculate monthly payment using the amortizing loan formula."""
         P = Decimal(str(self.amount))
         r = Decimal(str(self.interest_rate)) / 100  # Monthly rate
         n = self.term_months
@@ -73,20 +74,24 @@ class Loan(models.Model):
         return P * (r * (1 + r) ** n) / ((1 + r) ** n - 1)
 
     def generate_amortization_schedule(self):
-        """Generate amortization schedule for the loan."""
         monthly_payment = self.calculate_monthly_payment()
-        balance = Decimal(str(self.amount))
+        balance = Decimal(str(self.balance))  # Convert initial balance to Decimal
         r = Decimal(str(self.interest_rate)) / 100
         schedule = []
+        current_date = self.start_date
         for month in range(1, self.term_months + 1):
             interest = balance * r
             principal_paid = monthly_payment - interest
-            balance -= principal_paid
-            if balance < 0:
-                principal_paid += balance
-                balance = 0
+            if balance - principal_paid < 0:
+                principal_paid = balance
+                balance = Decimal('0.00')
+            else:
+                balance -= principal_paid
+            days = (current_date - self.start_date).days if month == 1 else ((current_date - schedule[-1]['date']).days)
             schedule.append({
                 'month': month,
+                'date': current_date,
+                'days': days,
                 'payment': float(monthly_payment.quantize(Decimal('0.01'))),
                 'interest': float(interest.quantize(Decimal('0.01'))),
                 'principal': float(principal_paid.quantize(Decimal('0.01'))),
@@ -94,15 +99,7 @@ class Loan(models.Model):
             })
             if balance <= 0:
                 break
-        if balance > 0:
-            final_payment = balance + (balance * r)
-            schedule.append({
-                'month': len(schedule) + 1,
-                'payment': float(final_payment.quantize(Decimal('0.01'))),
-                'interest': float((balance * r).quantize(Decimal('0.01'))),
-                'principal': float(balance.quantize(Decimal('0.01'))),
-                'balance': 0.00
-            })
+            current_date += timedelta(days=30)  # Approximate 30-day month
         return schedule
 
 class Repayment(models.Model):
