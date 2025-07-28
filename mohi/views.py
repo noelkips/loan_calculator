@@ -18,6 +18,7 @@ import os
 from django.conf import settings
 from django.core.paginator import Paginator
 from decimal import Decimal, InvalidOperation
+# from datetime import date as dt
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -523,7 +524,7 @@ def loan_download(request, loan_id):
     })
 
 
-
+from datetime import datetime, timedelta
 def pdf_preview(request):
     try:
         principal = float(request.GET.get('principal'))
@@ -537,7 +538,7 @@ def pdf_preview(request):
         # Convert timestamp to date only, fixing ISO format
         if ' ' in timestamp_str:
             timestamp_str = timestamp_str.replace(' ', '+')
-        base_date = dt.fromisoformat(timestamp_str).date()
+        base_date = datetime.fromisoformat(timestamp_str).date()
         
         # Generate payment dates using timedelta (approximate)
         schedule_with_dates = []
