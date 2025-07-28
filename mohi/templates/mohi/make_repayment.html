@@ -3,9 +3,29 @@
 {% block content %}
 <div class="container mx-auto p-4 max-w-4xl">
     <h1 class="text-2xl font-bold mb-4 text-mohi-deep-blue">Update Loan #{{ loan.id }}</h1>
+
+    {% if show_success %}
+        <div id="success-popup" class="fixed top-6 right-6 bg-green-600 text-white px-6 py-4 rounded-lg shadow-lg z-50">
+            ✅ Loan repayments updated successfully.
+        </div>
+        <script>
+            // Hide popup after 2.5s
+            setTimeout(() => {
+                const popup = document.getElementById('success-popup');
+                if (popup) popup.style.display = 'none';
+            }, 2500);
+
+            // Redirect after 3s
+            setTimeout(() => {
+                window.location.href = "{% url 'loan_list' %}";
+            }, 3000);
+        </script>
+    {% endif %}
+
     {% if error %}
         <p class="text-red-500">{{ error }}</p>
     {% endif %}
+
     <form method="post">
         {% csrf_token %}
         <h2 class="text-xl font-bold mt-6 mb-2 text-mohi-deep-blue">Payment Schedule</h2>
@@ -33,9 +53,9 @@
                         <td class="border-b p-2">{{ item.balance|floatformat:2 }}</td>
                         <td class="border-b p-2">
                             <input type="checkbox" name="paid_{{ forloop.counter0 }}" 
-                                   {% for rep in repayments %}
-                                       {% if rep.date == item.date and rep.amount > 0 %}checked{% endif %}
-                                   {% endfor %}>
+                                {% for rep in repayments %}
+                                    {% if rep.date == item.date and rep.amount > 0 %}checked{% endif %}
+                                {% endfor %}>
                         </td>
                     </tr>
                     {% endfor %}

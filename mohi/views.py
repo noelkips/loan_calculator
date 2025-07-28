@@ -18,6 +18,7 @@ import os
 from django.conf import settings
 from django.core.paginator import Paginator
 from decimal import Decimal, InvalidOperation
+from django.contrib import messages
 # from datetime import date as dt
 
 # Configure logging
@@ -52,7 +53,6 @@ def home(request):
                 })
     return render(request, 'mohi/home.html', context)
 
-
 @is_staff_required
 def register(request):
     if request.method == 'POST':
@@ -80,7 +80,9 @@ def register(request):
             is_active=True
         )
         user.save()
-        return redirect('home')
+
+        messages.success(request, "User registered successfully.")
+        return render(request, 'mohi/register.html', {'show_success': True})
 
     return render(request, 'mohi/register.html')
 
@@ -244,16 +246,16 @@ def loan_detail(request, loan_id):
         'loan_ksh_amount': loan_ksh_amount,
         'loan_ksh_balance': loan_ksh_balance
     })
-
-
 @login_required
 def make_repayment(request, loan_id):
     loan = get_object_or_404(Loan, id=loan_id)
     if not request.user.is_staff and loan.user != request.user:
         return redirect('loan_list')
+
     schedule = loan.generate_amortization_schedule()
     repayments = Repayment.objects.filter(loan=loan)
     exchange_rate = 1  # 1 USD = 1 KSH
+
     schedule_ksh = [
         {
             'month': item['month'],
@@ -279,13 +281,12 @@ def make_repayment(request, loan_id):
             for i, item in enumerate(schedule_ksh):
                 checkbox_name = f'paid_{i}'
                 if request.POST.get(checkbox_name):
-                    payment_amount = Decimal(str(item['payment']))  # Convert to Decimal
-                    interest = Decimal(str(item['interest']))       # Convert to Decimal
-                    principal = Decimal(str(item['principal']))     # Convert to Decimal
-                    amount = payment_amount                        # Use monthly payment as total amount
-                    total_paid += amount / Decimal(str(exchange_rate))  # Convert to USD as Decimal
+                    payment_amount = Decimal(str(item['payment']))
+                    interest = Decimal(str(item['interest']))
+                    principal = Decimal(str(item['principal']))
+                    amount = payment_amount
+                    total_paid += amount / Decimal(str(exchange_rate))
 
-                    # Check if repayment already exists for this month
                     existing_repayment = repayments.filter(date=item['date']).first()
                     if existing_repayment:
                         existing_repayment.amount = amount / Decimal(str(exchange_rate))
@@ -300,7 +301,7 @@ def make_repayment(request, loan_id):
                             principal=principal / Decimal(str(exchange_rate)),
                             interest=interest / Decimal(str(exchange_rate))
                         )
-                    loan.balance -= amount / Decimal(str(exchange_rate))  # Use Decimal for subtraction
+                    loan.balance -= amount / Decimal(str(exchange_rate))
 
             if loan.balance <= Decimal('0.00'):
                 loan.balance = Decimal('0.00')
@@ -308,15 +309,20 @@ def make_repayment(request, loan_id):
                 loan.end_date = timezone.now().date()
             loan.save()
 
-        return redirect('loan_list')
+        messages.success(request, "Loan repayments updated successfully.")
+        return render(request, 'mohi/make_repayment.html', {
+            'loan': loan,
+            'schedule': schedule_ksh,
+            'repayments': repayments_ksh,
+            'show_success': True  # trigger popup in template
+        })
 
     return render(request, 'mohi/make_repayment.html', {
         'loan': loan,
         'schedule': schedule_ksh,
         'repayments': repayments_ksh,
-        'error': None
+        'show_success': False
     })
-
 
 @login_required
 def loan_report(request):
@@ -538,7 +544,7 @@ def pdf_preview(request):
         # Convert timestamp to date only, fixing ISO format
         if ' ' in timestamp_str:
             timestamp_str = timestamp_str.replace(' ', '+')
-        base_date = datetime.fromisoformat(timestamp_str).date()
+        base_date = datetimemake.fromisoformat(timestamp_str).date()
         
         # Generate payment dates using timedelta (approximate)
         schedule_with_dates = []
