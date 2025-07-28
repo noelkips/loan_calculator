@@ -1,26 +1,285 @@
 {% extends 'mohi/base.html' %}
+{% load static %}
 
 {% block content %}
-<div class="container mx-auto p-4">
-    <h1 class="text-2xl font-bold mb-4 text-mohi-deep-blue">Your Loans</h1>
-    <ul>
-        {% for loan in loans %}
-        <li class="mb-2">
-            <div class="bg-white p-4 rounded shadow">
-                <p class="text-gray-700">Loan Amount: ${{ loan.amount }}</p>
-                <p class="text-gray-700">Term: {{ loan.term_months }} months</p>
-                <p class="text-gray-700">Start Date: {{ loan.start_date }}</p>
-                <p class="text-gray-700">Balance: ${{ loan.balance }}</p>
-                <p class="text-gray-700">Status: {% if loan.is_paid %}Paid{% else %}Active{% endif %}</p>
-                <a href="{% url 'loan_detail' loan.id %}" class="text-mohi-light-blue hover:underline">View Details</a>
-                {% if not loan.is_paid %}
-                <a href="{% url 'make_repayment' loan.id %}" class="ml-4 text-mohi-green hover:underline">Make Repayment</a>
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+        <div>
+            <h1 class="text-2xl font-bold text-mohi-deep-blue">{% if user.is_staff %}All Loans{% else %}My Loans{% endif %}</h1>
+            <p class="mt-1 text-sm text-gray-600">Manage your loan accounts</p>
+        </div>
+        {% if user.is_staff %}
+        <div class="mt-4 sm:mt-0 flex space-x-3">
+            <a href="{% url 'issue_loan' %}" 
+               class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-mohi-green hover:bg-mohi-light-blue focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-mohi-green-500 transition-colors">
+                <i class="fas fa-plus mr-2"></i>
+                Issue New Loan
+            </a>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-8 h-8 bg-green-100 rounded-md flex items-center justify-center">
+                        <i class="fas fa-check-circle text-green-600"></i>
+                    </div>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-gray-500">Total Loans</p>
+                    <p class="text-2xl font-semibold text-mohi-deep-blue">{{ total_loans }}</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-8 h-8 bg-blue-100 rounded-md flex items-center justify-center">
+                        <i class="fas fa-dollar-sign text-blue-600"></i>
+                    </div>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-gray-500">Total Amount</p>
+                    <p class="text-2xl font-semibold text-mohi-deep-blue">KSh {{ total_amount|floatformat:2 }}</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div class="flex items-center">
+                <div class="flex-shrink-0">
+                    <div class="w-8 h-8 bg-purple-100 rounded-md flex items-center justify-center">
+                        <i class="fas fa-money-bill-wave text-purple-600"></i>
+                    </div>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-gray-500">Total Paid</p>
+                    <p class="text-2xl font-semibold text-mohi-deep-blue">KSh {{ total_paid|floatformat:2 }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search and Filters -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+        <div class="p-6">
+            <form method="get" class="flex flex-col sm:flex-row gap-4">
+                <div class="flex-1">
+                    <label for="search" class="sr-only">Search</label>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <i class="fas fa-search text-gray-400"></i>
+                        </div>
+                        <input type="text" name="search" id="search" value="{{ search_query }}"
+                               class="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-mohi-light-blue focus:border-mohi-light-blue"
+                               placeholder="Search by user email, loan ID, or status...">
+                    </div>
+                </div>
+                <button type="submit"
+                        class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-mohi-green hover:bg-mohi-light-blue focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-mohi-green-500 transition-colors">
+                    <i class="fas fa-search mr-2"></i>
+                    Search
+                </button>
+                {% if search_query %}
+                <a href="{% url 'loan_list' %}"
+                   class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-mohi-green-500 transition-colors">
+                    <i class="fas fa-times mr-2"></i>
+                    Clear
+                </a>
+                {% endif %}
+            </form>
+        </div>
+    </div>
+
+    <!-- Loans Table -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h3 class="text-lg font-medium text-mohi-deep-blue">
+                <i class="fas fa-list mr-2 text-mohi-green"></i>
+                Loan List
+            </h3>
+        </div>
+        
+        {% if loans %}
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Loan Details
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            User
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Term
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Initial Amount
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Balance
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Status
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Actions
+                        </th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    {% for loan in loans %}
+                    <tr class="hover:bg-gray-50 transition-colors">
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="flex flex-col">
+                                <div class="text-sm font-medium text-gray-900">
+                                    Loan #{{ loan.id }}
+                                </div>
+                                <div class="text-sm text-gray-500">
+                                    {{ loan.start_date|date:"M d, Y" }}
+                                </div>
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="flex flex-col">
+                                <div class="text-sm font-medium text-gray-900">
+                                    {{ loan.user.email }}
+                                </div>
+                                <div class="text-sm text-gray-500">
+                                    {{ loan.user.first_name }} {{ loan.user.last_name }}
+                                </div>
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-sm text-gray-900">
+                                {{ loan.term_months }} months
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-sm font-medium text-gray-900">
+                                KSh {{ loan.amount|floatformat:2 }}
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-sm font-medium text-gray-900">
+                                KSh {{ loan.balance|floatformat:2 }}
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                                {% if loan.is_paid %}bg-green-100 text-green-800{% else %}bg-yellow-100 text-yellow-800{% endif %}">
+                                {% if loan.is_paid %}Paid{% else %}Active{% endif %}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <div class="flex space-x-2">
+                                <a href="{% url 'loan_detail' loan.id %}" 
+                                   class="text-mohi-light-blue hover:text-mohi-deep-blue transition-colors">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                                {% if user.is_staff %}
+                                <a href="{% url 'make_repayment' loan.id %}" 
+                                   class="text-mohi-green hover:text-mohi-light-blue transition-colors">
+                                    <i class="fas fa-edit"></i> Update
+                                </a>
+                                <a href="{% url 'loan_detail' loan.id %}" 
+                                   class="text-mohi-light-blue hover:text-mohi-deep-blue transition-colors ml-2">
+                                    <i class="fas fa-eye"></i> View
+                                </a>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Pagination -->
+        {% if is_paginated %}
+        <div class="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+            <div class="flex-1 flex justify-between sm:hidden">
+                {% if page_obj.has_previous %}
+                <a href="?page={{ page_obj.previous_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}" 
+                   class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                    Previous
+                </a>
+                {% endif %}
+                {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}" 
+                   class="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                    Next
+                </a>
                 {% endif %}
             </div>
-        </li>
-        {% empty %}
-        <p class="text-gray-700">No loans found.</p>
-        {% endfor %}
-    </ul>
+            <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                <div>
+                    <p class="text-sm text-gray-700">
+                        Showing <span class="font-medium">{{ page_obj.start_index }}</span> to 
+                        <span class="font-medium">{{ page_obj.end_index }}</span> of 
+                        <span class="font-medium">{{ page_obj.paginator.count }}</span> results
+                    </p>
+                </div>
+                <div>
+                    <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
+                        {% if page_obj.has_previous %}
+                        <a href="?page={{ page_obj.previous_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}" 
+                           class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
+                            <i class="fas fa-chevron-left"></i>
+                        </a>
+                        {% endif %}
+                        
+                        {% for num in page_obj.paginator.page_range %}
+                        {% if page_obj.number == num %}
+                        <span class="relative inline-flex items-center px-4 py-2 border border-mohi-green bg-mohi-green-50 text-sm font-medium text-mohi-deep-blue">
+                            {{ num }}
+                        </span>
+                        {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                        <a href="?page={{ num }}{% if search_query %}&search={{ search_query }}{% endif %}" 
+                           class="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50">
+                            {{ num }}
+                        </a>
+                        {% endif %}
+                        {% endfor %}
+                        
+                        {% if page_obj.has_next %}
+                        <a href="?page={{ page_obj.next_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}" 
+                           class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
+                            <i class="fas fa-chevron-right"></i>
+                        </a>
+                        {% endif %}
+                    </nav>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
+        {% else %}
+        <div class="text-center py-12">
+            <i class="fas fa-list text-gray-400 text-6xl mb-4"></i>
+            <h3 class="text-lg font-medium text-mohi-deep-blue mb-2">No loans found</h3>
+            <p class="text-gray-500 mb-6">
+                {% if search_query %}
+                    No loans match your search criteria.
+                {% else %}
+                    There are no loans yet.
+                {% endif %}
+            </p>
+            {% if user.is_staff and not search_query %}
+            <a href="{% url 'issue_loan' %}" 
+               class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-mohi-green hover:bg-mohi-light-blue focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-mohi-green-500 transition-colors">
+                <i class="fas fa-plus mr-2"></i>
+                Issue New Loan
+            </a>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
 </div>
 {% endblock %}

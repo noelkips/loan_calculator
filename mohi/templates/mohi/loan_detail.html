@@ -3,28 +3,28 @@
 {% block content %}
 <div class="container mx-auto p-4">
     <div class="flex flex-col md:flex-row gap-6">
-        <!-- Loan Card -->
-        <div class="bg-white p-6 rounded-lg shadow-lg w-full md:w-1/2">
-            <h1 class="text-2xl font-bold mb-4 text-mohi-deep-blue">Loan #{{ loan.id }}</h1>
-            <div class="space-y-2">
-                <p><strong>Amount:</strong> KSH {{ loan.amount|floatformat:2|multiply:exchange_rate }}</p>
-                <p><strong>Term:</strong> 14 months</p>
-                <p><strong>Start Date:</strong> July 25, 2025</p>
-                <p><strong>Balance:</strong> KSH {{ loan.balance|floatformat:2|mul:exchange_rate }}</p>
-                <p><strong>Status:</strong> Active</p>
-            </div>
-            <button id="download-pdf" class="mt-4 bg-mohi-green text-white p-2 rounded w-full hover:bg-mohi-light-blue transition duration-200">Download Payment Schedule (PDF)</button>
-        </div>
-
-        <!-- User Information -->
-        <div class="bg-white p-6 rounded-lg shadow-lg w-full md:w-1/2">
-            <h2 class="text-xl font-bold mb-4 text-mohi-deep-blue">User Information</h2>
+        <!-- User Card -->
+        <div class="bg-white p-6 rounded-lg shadow-lg w-full md:w-1/4">
+            <h2 class="text-xl font-bold mb-4 text-mohi-deep-blue">Loan Taker</h2>
             <div class="space-y-2">
                 <p><strong>Email:</strong> {{ loan.user.email }}</p>
                 <p><strong>Name:</strong> {{ loan.user.first_name }} {{ loan.user.last_name }}</p>
                 <p><strong>Department:</strong> {{ loan.user.department }}</p>
                 <p><strong>Designation:</strong> {{ loan.user.designation }}</p>
             </div>
+        </div>
+
+        <!-- Loan Card -->
+        <div class="bg-white p-6 rounded-lg shadow-lg w-full md:w-1/2">
+            <h1 class="text-2xl font-bold mb-4 text-mohi-deep-blue">Loan #{{ loan.id }}</h1>
+            <div class="space-y-2">
+                <p><strong>Amount:</strong> KSH {{ loan_ksh_amount|floatformat:2 }}</p>
+                <p><strong>Term:</strong> {{ loan.term_months }} months</p>
+                <p><strong>Start Date:</strong> {{ loan.start_date|date:"F d, Y" }}</p>
+                <p><strong>Balance:</strong> KSH {{ loan_ksh_balance|floatformat:2 }}</p>
+                <p><strong>Status:</strong> {% if loan.is_paid %}Paid{% else %}Active{% endif %}</p>
+            </div>
+            <a href="{% url 'loan_download' loan.id %}" target="_blank" class="mt-4 bg-mohi-green text-white p-2 rounded w-full text-center inline-block hover:bg-mohi-light-blue transition duration-200">Download Payment Schedule</a>
         </div>
     </div>
 
@@ -39,6 +39,7 @@
                     <th class="border-b-2 p-2">Interest (KSH)</th>
                     <th class="border-b-2 p-2">Principal (KSH)</th>
                     <th class="border-b-2 p-2">Balance (KSH)</th>
+                    <th class="border-b-2 p-2">Paid</th>
                 </tr>
             </thead>
             <tbody>
@@ -46,10 +47,16 @@
                 <tr>
                     <td class="border-b p-2">{{ item.month }}</td>
                     <td class="border-b p-2">{{ item.date|date:"Y-m-d" }}</td>
-                    <td class="border-b p-2">{{ item.payment|mul:exchange_rate|floatformat:2 }}</td>
-                    <td class="border-b p-2">{{ item.interest|mul:exchange_rate|floatformat:2 }}</td>
-                    <td class="border-b p-2">{{ item.principal|mul:exchange_rate|floatformat:2 }}</td>
-                    <td class="border-b p-2">{{ item.balance|mul:exchange_rate|floatformat:2 }}</td>
+                    <td class="border-b p-2">{{ item.payment|floatformat:2 }}</td>
+                    <td class="border-b p-2">{{ item.interest|floatformat:2 }}</td>
+                    <td class="border-b p-2">{{ item.principal|floatformat:2 }}</td>
+                    <td class="border-b p-2">{{ item.balance|floatformat:2 }}</td>
+                    <td class="border-b p-2">
+                        <input type="checkbox" disabled
+                               {% for rep in repayments %}
+                                   {% if rep.date == item.date and rep.amount > 0 %}checked{% endif %}
+                               {% endfor %}>
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -70,10 +77,10 @@
             <tbody>
                 {% for repayment in repayments %}
                 <tr>
-                    <td class="border-b p-2">{{ repayment.date }}</td>
-                    <td class="border-b p-2">{{ repayment.amount|mul:exchange_rate|floatformat:2 }}</td>
-                    <td class="border-b p-2">{{ repayment.principal|mul:exchange_rate|floatformat:2 }}</td>
-                    <td class="border-b p-2">{{ repayment.interest|mul:exchange_rate|floatformat:2 }}</td>
+                    <td class="border-b p-2">{{ repayment.date|date:"Y-m-d" }}</td>
+                    <td class="border-b p-2">{{ repayment.amount|floatformat:2 }}</td>
+                    <td class="border-b p-2">{{ repayment.principal|floatformat:2 }}</td>
+                    <td class="border-b p-2">{{ repayment.interest|floatformat:2 }}</td>
                 </tr>
                 {% empty %}
                 <tr>
@@ -84,45 +91,4 @@
         </table>
     </div>
 </div>
-
-<!-- JavaScript for PDF Download -->
-<script>
-    document.getElementById('download-pdf').addEventListener('click', function() {
-        const loan = {
-            id: {{ loan.id }},
-            amount: {{ loan.amount|floatformat:2|mul:exchange_rate }},
-            term_months: 14,
-            start_date: 'July 25, 2025',
-            balance: {{ loan.balance|floatformat:2|mul:exchange_rate }},
-            status: 'Active',
-            user: {
-                email: '{{ loan.user.email }}',
-                name: '{{ loan.user.first_name }} {{ loan.user.last_name }}',
-                department: '{{ loan.user.department }}',
-                designation: '{{ loan.user.designation }}'
-            },
-            schedule: {{ schedule|safe }}
-        };
-        const pdfData = {
-            loan: loan,
-            repayments: {{ repayments|safe }}
-        };
-        fetch('/generate-pdf/', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
-            },
-            body: JSON.stringify(pdfData)
-        })
-        .then(response => response.blob())
-        .then(blob => {
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `Payment_Schedule_Loan_${loan.id}.pdf`;
-            a.click();
-        });
-    });
-</script>
 {% endblock %}

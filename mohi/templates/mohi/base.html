@@ -32,7 +32,9 @@
                 <!-- Navigation Links -->
                 <div id="nav-links" class="hidden md:flex md:items-center md:space-x-4">
                     {% if user.is_authenticated %}
-                        <a href="{% url 'loan_list' %}" class="hover:text-mohi-light-blue transition duration-200">My Loans</a>
+                        <a href="{% url 'loan_list' %}" class="block py-2 hover:text-mohi-light-blue transition duration-200">
+                                {{ user.is_staff|yesno:"All Loans,My Loans" }}
+                        </a>
                         {% if user.is_staff %}
                             <a href="{% url 'issue_loan' %}" class="hover:text-mohi-light-blue transition duration-200">Issue Loan</a>
                             <a href="{% url 'register' %}" class="hover:text-mohi-light-blue transition duration-200">Register User</a>
@@ -48,7 +50,10 @@
         <!-- Mobile Menu -->
         <div id="mobile-menu" class="md:hidden hidden bg-mohi-deep-blue text-white px-4 py-2">
             {% if user.is_authenticated %}
-                <a href="{% url 'loan_list' %}" class="block py-2 hover:text-mohi-light-blue transition duration-200">My Loans</a>
+            <a href="{% url 'loan_list' %}" class="block py-2 hover:text-mohi-light-blue transition duration-200">
+                {{ user.is_staff|yesno:"All Loans,My Loans" }}
+            </a>
+
                 {% if user.is_staff %}
                     <a href="{% url 'issue_loan' %}" class="block py-2 hover:text-mohi-light-blue transition duration-200">Issue Loan</a>
                     <a href="{% url 'register' %}" class="block py-2 hover:text-mohi-light-blue transition duration-200">Register User</a>

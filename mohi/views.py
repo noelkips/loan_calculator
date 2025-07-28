@@ -1,24 +1,14 @@
 from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib.auth import login, authenticate
-from django.contrib.auth.decorators import login_required
-from django.contrib.auth.hashers import make_password
-from django.db import transaction
-from django.db.models import Sum
-from django.utils import timezone
-from datetime import timedelta
-from .decorators import is_staff_required
-from .models import CustomUser, Loan, Repayment
-from datetime import datetime as dt
-from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import login, authenticate, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.hashers import make_password
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import Sum, Q
 from django.utils import timezone
 from datetime import timedelta
 from .decorators import is_staff_required
 from .models import CustomUser, Loan, Repayment
+from django.db.models.functions import TruncMonth
 import logging
 import json
 from django.http import JsonResponse, HttpResponse
@@ -26,10 +16,41 @@ from django.views.decorators.csrf import csrf_exempt
 import subprocess
 import os
 from django.conf import settings
+from django.core.paginator import Paginator
+from decimal import Decimal, InvalidOperation
+
+# Configure logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
 
 
 def home(request):
-    return render(request, 'mohi/home.html')
+    context = {}
+    if request.user.is_authenticated:
+        exchange_rate = 1  # 1 USD = 1 KSH
+        if request.user.is_staff:
+            loans = Loan.objects.all()
+            total_loans = loans.count()
+            total_amount = loans.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+            total_paid = Repayment.objects.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+            context.update({
+                'total_loans': total_loans,
+                'total_amount': total_amount * exchange_rate,
+                'total_paid': total_paid * exchange_rate
+            })
+        else:
+            user_loans = Loan.objects.filter(user=request.user)
+            context['user_loans'] = user_loans
+            if user_loans.exists():
+                user_total_amount = user_loans.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+                user_total_paid = Repayment.objects.filter(loan__in=user_loans).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+                context.update({
+                    'user_total_amount': user_total_amount * exchange_rate,
+                    'user_total_paid': user_total_paid * exchange_rate
+                })
+    return render(request, 'mohi/home.html', context)
+
 
 @is_staff_required
 def register(request):
@@ -138,70 +159,212 @@ def issue_loan(request):
 
 @login_required
 def loan_list(request):
-    if request.user.is_staff:
-        loans = Loan.objects.all()
-    else:
-        loans = Loan.objects.filter(user=request.user)
-    return render(request, 'mohi/loan_list.html', {'loans': loans})
+    search_query = request.GET.get('search', '')
+    loans = Loan.objects.all() if request.user.is_staff else Loan.objects.filter(user=request.user)
+    if search_query:
+        loans = loans.filter(
+            Q(id__icontains=search_query.strip()) |
+            Q(user__email__icontains=search_query.strip()) |
+            Q(is_paid__icontains=search_query.strip())
+        )
+    # Update balance for each loan based on repayments
+    for loan in loans:
+        total_repaid = Repayment.objects.filter(loan=loan).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        loan.balance = max(Decimal('0.00'), loan.amount - total_repaid)
+        if loan.balance <= Decimal('0.00'):
+            loan.is_paid = True
+        else:
+            loan.is_paid = False
+        loan.save()
+
+    # Pagination
+    paginator = Paginator(loans, 10)  # 10 loans per page
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    # Stats
+    total_loans = loans.count()
+    total_amount = loans.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+    total_paid = Repayment.objects.filter(loan__in=loans).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+    exchange_rate = 1  # 1 USD = 1 KSH
+    total_amount_ksh = total_amount * exchange_rate
+    total_paid_ksh = total_paid * exchange_rate
+    return render(request, 'mohi/loan_list.html', {
+        'loans': page_obj,
+        'total_loans': total_loans,
+        'total_amount': total_amount_ksh,
+        'total_paid': total_paid_ksh,
+        'search_query': search_query,
+        'is_paginated': True,
+        'page_obj': page_obj
+    })
+
+
 
 @login_required
 def loan_detail(request, loan_id):
     loan = get_object_or_404(Loan, id=loan_id)
     if not request.user.is_staff and loan.user != request.user:
         return redirect('loan_list')
-    schedule = loan.generate_amortization_schedule()
+    # Generate the original 14-month amortization schedule based on initial loan terms
+    schedule = loan.generate_amortization_schedule(original=True)  # Assume a flag for original schedule
     repayments = Repayment.objects.filter(loan=loan)
-    return render(request, 'mohi/loan_detail.html', {'loan': loan, 'schedule': schedule, 'repayments': repayments})
+    exchange_rate = 1  # 1 USD = 1 KSH
+    loan_ksh_amount = loan.amount * exchange_rate
+    # Calculate current balance based on repayments, not schedule adjustment
+    total_repaid = Repayment.objects.filter(loan=loan).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+    loan_ksh_balance = max(Decimal('0.00'), (loan.amount - total_repaid) * exchange_rate)
+    if loan_ksh_balance <= Decimal('0.00'):
+        loan.is_paid = True
+    else:
+        loan.is_paid = False
+    loan.save()
+    schedule_ksh = [
+        {
+            'month': item['month'],
+            'date': item['date'],
+            'payment': item['payment'] * exchange_rate,
+            'interest': item['interest'] * exchange_rate,
+            'principal': item['principal'] * exchange_rate,
+            'balance': item['balance'] * exchange_rate  # Original balance from schedule
+        } for item in schedule
+    ]
+    repayments_ksh = [
+        {
+            'date': rep.date,
+            'amount': rep.amount * exchange_rate,
+            'principal': rep.principal * exchange_rate,
+            'interest': rep.interest * exchange_rate
+        } for rep in repayments
+    ]
+    return render(request, 'mohi/loan_detail.html', {
+        'loan': loan,
+        'schedule': schedule_ksh,
+        'repayments': repayments_ksh,
+        'loan_ksh_amount': loan_ksh_amount,
+        'loan_ksh_balance': loan_ksh_balance
+    })
+
 
 @login_required
 def make_repayment(request, loan_id):
     loan = get_object_or_404(Loan, id=loan_id)
     if not request.user.is_staff and loan.user != request.user:
         return redirect('loan_list')
+    schedule = loan.generate_amortization_schedule()
+    repayments = Repayment.objects.filter(loan=loan)
+    exchange_rate = 1  # 1 USD = 1 KSH
+    schedule_ksh = [
+        {
+            'month': item['month'],
+            'date': item['date'],
+            'payment': item['payment'] * exchange_rate,
+            'interest': item['interest'] * exchange_rate,
+            'principal': item['principal'] * exchange_rate,
+            'balance': item['balance'] * exchange_rate
+        } for item in schedule
+    ]
+    repayments_ksh = [
+        {
+            'date': rep.date,
+            'amount': float(rep.amount) * exchange_rate,
+            'principal': float(rep.principal) * exchange_rate,
+            'interest': float(rep.interest) * exchange_rate
+        } for rep in repayments
+    ]
+
     if request.method == 'POST':
-        amount = request.POST.get('amount')
-        try:
-            amount = float(amount)
-            if amount <= 0:
-                raise ValueError
-            if amount > float(loan.balance):
-                return render(request, 'mohi/make_repayment.html', {'loan': loan, 'error': 'Repayment amount exceeds loan balance.'})
-        except ValueError:
-            return render(request, 'mohi/make_repayment.html', {'loan': loan, 'error': 'Invalid repayment amount.'})
-
-        monthly_rate = float(loan.interest_rate) / 100
-        interest = float(loan.balance) * monthly_rate
-        principal = min(amount, float(loan.balance) - interest)
-        if principal < 0:
-            principal = 0
-            interest = amount
-
+        total_paid = Decimal('0.00')
         with transaction.atomic():
-            repayment = Repayment.objects.create(
-                loan=loan,
-                date=timezone.now().date(),
-                amount=amount,
-                principal=principal,
-                interest=interest
-            )
-            loan.balance -= amount
-            if loan.balance <= 0:
-                loan.balance = 0
+            for i, item in enumerate(schedule_ksh):
+                checkbox_name = f'paid_{i}'
+                if request.POST.get(checkbox_name):
+                    payment_amount = Decimal(str(item['payment']))  # Convert to Decimal
+                    interest = Decimal(str(item['interest']))       # Convert to Decimal
+                    principal = Decimal(str(item['principal']))     # Convert to Decimal
+                    amount = payment_amount                        # Use monthly payment as total amount
+                    total_paid += amount / Decimal(str(exchange_rate))  # Convert to USD as Decimal
+
+                    # Check if repayment already exists for this month
+                    existing_repayment = repayments.filter(date=item['date']).first()
+                    if existing_repayment:
+                        existing_repayment.amount = amount / Decimal(str(exchange_rate))
+                        existing_repayment.principal = principal / Decimal(str(exchange_rate))
+                        existing_repayment.interest = interest / Decimal(str(exchange_rate))
+                        existing_repayment.save()
+                    else:
+                        Repayment.objects.create(
+                            loan=loan,
+                            date=item['date'],
+                            amount=amount / Decimal(str(exchange_rate)),
+                            principal=principal / Decimal(str(exchange_rate)),
+                            interest=interest / Decimal(str(exchange_rate))
+                        )
+                    loan.balance -= amount / Decimal(str(exchange_rate))  # Use Decimal for subtraction
+
+            if loan.balance <= Decimal('0.00'):
+                loan.balance = Decimal('0.00')
                 loan.is_paid = True
                 loan.end_date = timezone.now().date()
             loan.save()
-            repayment.save()
 
         return redirect('loan_list')
 
-    return render(request, 'mohi/make_repayment.html', {'loan': loan})
+    return render(request, 'mohi/make_repayment.html', {
+        'loan': loan,
+        'schedule': schedule_ksh,
+        'repayments': repayments_ksh,
+        'error': None
+    })
 
-@is_staff_required
+
+@login_required
 def loan_report(request):
-    total_loans = Loan.objects.aggregate(total=Sum('amount'))['total'] or 0
-    total_repayments = Repayment.objects.aggregate(total=Sum('amount'))['total'] or 0
-    loans = Loan.objects.all()
-    return render(request, 'mohi/loan_report.html', {'total_loans': total_loans, 'total_repayments': total_repayments, 'loans': loans})
+    exchange_rate = 1
+    chart_data = {}
+    if request.user.is_staff:
+        total_loans_count = Loan.objects.count()
+        total_amount = Loan.objects.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        total_repayments = Repayment.objects.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        loans = Loan.objects.all()
+
+        # Aggregate data for admin charts
+        total_outstanding = max(Decimal('0.00'), total_amount - total_repayments)
+        chart_data['loan_summary'] = {
+            'labels': ['Total Amount', 'Total Repayments', 'Total Outstanding'],
+            'data': [float(total_amount * exchange_rate), float(total_repayments * exchange_rate), float(total_outstanding * exchange_rate)],
+            'backgroundColor': ['#1E3A8A', '#10B981', '#F59E0B']
+        }
+        repayments_by_month = Repayment.objects.annotate(month=TruncMonth('date')).values('month').annotate(total=Sum('amount')).order_by('month')
+        chart_data['repayment_trend'] = {
+            'labels': [item['month'].strftime('%Y-%m') for item in repayments_by_month],
+            'data': [float(item['total'] * exchange_rate) for item in repayments_by_month],
+            'borderColor': '#1E3A8A',
+            'fill': False
+        }
+    else:
+        user_loans = Loan.objects.filter(user=request.user)
+        total_loans_count = user_loans.count()
+        total_amount = user_loans.aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        total_repayments = Repayment.objects.filter(loan__in=user_loans).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+        loans = user_loans
+        total_outstanding = max(Decimal('0.00'), total_amount - total_repayments)
+        chart_data['loan_summary'] = {
+            'labels': ['Your Total Amount', 'Your Total Repayments', 'Your Total Outstanding'],
+            'data': [float(total_amount * exchange_rate), float(total_repayments * exchange_rate), float(total_outstanding * exchange_rate)],
+            'backgroundColor': ['#1E3A8A', '#10B981', '#F59E0B']
+        }
+
+    context = {
+        'total_loans': total_loans_count,
+        'total_amount': total_amount * exchange_rate,
+        'total_repayments': total_repayments * exchange_rate,
+        'loans': loans,
+        'chart_data': chart_data
+    }
+    return render(request, 'mohi/loan_report.html', context)
+
+# ... (oth
+
 def login_view(request):
     if request.method == 'POST':
         email = request.POST.get('username')
@@ -317,10 +480,49 @@ def loan_calculator(request):
             return render(request, 'mohi/loan_calculator.html', {'error': str(e)})
     return render(request, 'mohi/loan_calculator.html')
 
+@login_required
+def loan_download(request, loan_id):
+    loan = get_object_or_404(Loan, id=loan_id)
+    if not request.user.is_staff and loan.user != request.user:
+        return redirect('loan_list')
+    # Use generate_amortization_schedule for the original schedule
+    schedule = loan.generate_amortization_schedule(original=True)
+    repayments = Repayment.objects.filter(loan=loan)
+    exchange_rate = 1  # 1 USD = 1 KSH
+    # Calculate monthly payment from the first schedule item (assuming consistent payment)
+    monthly_payment = schedule[0]['payment'] if schedule else Decimal('0.00')
+    total_interest = sum(item['interest'] for item in schedule)
+    total_paid = Repayment.objects.filter(loan=loan).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+    schedule_ksh = [
+        {
+            'month': item['month'],
+            'date': item['date'],
+            'payment': item['payment'] * exchange_rate,
+            'interest': item['interest'] * exchange_rate,
+            'principal': item['principal'] * exchange_rate,
+            'balance': item['balance'] * exchange_rate
+        } for item in schedule
+    ]
+    repayments_ksh = [
+        {
+            'date': rep.date,
+            'amount': rep.amount * exchange_rate,
+            'principal': rep.principal * exchange_rate,
+            'interest': rep.interest * exchange_rate
+        } for rep in repayments
+    ]
+    return render(request, 'mohi/loan_download.html', {
+        'loan': loan,
+        'user': loan.user,
+        'schedule': schedule_ksh,
+        'repayments': repayments_ksh,
+        'loan_ksh_amount': loan.amount * exchange_rate,
+        'monthly_payment': monthly_payment * exchange_rate,
+        'total_interest': total_interest * exchange_rate,
+        'total_paid': total_paid * exchange_rate
+    })
 
 
-from datetime import timedelta
-import datetime
 
 def pdf_preview(request):
     try:
@@ -457,9 +659,9 @@ def generate_pdf(request):
         for repayment in repayments:
             latex_content += r"%s & %.2f & %.2f & %.2f \\" % (
                 repayment.date,
-                repayment.amount * 130,
-                repayment.principal * 130,
-                repayment.interest * 130
+                repayment.amount * 1,
+                repayment.principal * 1,
+                repayment.interest * 1
             )
 
         latex_content += r"""

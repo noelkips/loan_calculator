@@ -1,125 +1,128 @@
-<script type="text/javascript">
-        var gk_isXlsx = false;
-        var gk_xlsxFileLookup = {};
-        var gk_fileData = {};
-        function filledCell(cell) {
-          return cell !== '' && cell != null;
-        }
-        function loadFileData(filename) {
-        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
-            try {
-                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
-                var firstSheetName = workbook.SheetNames[0];
-                var worksheet = workbook.Sheets[firstSheetName];
-
-                // Convert sheet to JSON to filter blank rows
-                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
-                // Filter out blank rows (rows where all cells are empty, null, or undefined)
-                var filteredData = jsonData.filter(row => row.some(filledCell));
-
-                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
-                var headerRowIndex = filteredData.findIndex((row, index) =>
-                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
-                );
-                // Fallback
-                if (headerRowIndex === -1 || headerRowIndex > 25) {
-                  headerRowIndex = 0;
-                }
-
-                // Convert filtered JSON back to CSV
-                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
-                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
-                return csv;
-            } catch (e) {
-                console.error(e);
-                return "";
-            }
-        }
-        return gk_fileData[filename] || "";
-        }
-        </script>{% extends 'mohi/base.html' %}
+{% extends 'mohi/base.html' %}
 
 {% block content %}
 <div class="min-h-screen bg-gray-100 flex items-center justify-center p-4">
-    <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
-        <h1 class="text-2xl font-bold mb-4 text-mohi-deep-blue">Issue Loan</h1>
-        {% if error %}
-            <p class="text-red-500 mb-4">{{ error }}</p>
-        {% endif %}
-        <form method="post" class="space-y-4">
-            {% csrf_token %}
-            <div class="mb-4">
-                <label for="user_id" class="block text-gray-700">Select User</label>
-                <select name="user_id" id="user_id" class="w-full p-2 border rounded" required>
-                    {% for u in users %}
-                        <option value="{{ u.id }}">{{ u.email }} ({{ u.first_name }} {{ u.last_name }})</option>
-                    {% endfor %}
-                </select>
+    <div class="flex flex-col md:flex-row gap-6 w-full max-w-6xl">
+        <!-- Interest Rate Card -->
+        <div class="bg-white p-6 rounded-lg shadow-lg w-full md:w-1/4">
+            <h2 class="text-xl font-bold mb-4 text-mohi-deep-blue">Loan Details</h2>
+            <div class="space-y-4">
+                <p class="text-lg">
+                    <strong>Interest Rate:</strong> 
+                    <span class="text-mohi-green">1.0% monthly</span>
+                    <span class="relative group">
+                        <i class="fas fa-info-circle ml-2 text-gray-500 cursor-help"></i>
+                        <span class="absolute hidden group-hover:block bg-gray-800 text-white text-sm p-2 rounded mt-2 -left-10 w-48 z-10">
+                            Interest is calculated on the remaining balance.
+                        </span>
+                    </span>
+                </p>
             </div>
-            <div class="mb-4">
-                <label for="amount" class="block text-gray-700">Loan Amount ($)</label>
-                <input type="number" id="amount" name="amount" class="w-full p-2 border rounded" step="0.01" value="1000.00" required>
-            </div>
-            <div class="mb-4">
-                <label for="term_months" class="block text-gray-700">Term (Months)</label>
-                <input type="number" id="term_months" name="term_months" class="w-full p-2 border rounded" value="7" required>
-            </div>
-            <button type="submit" class="bg-mohi-green text-white p-2 rounded w-full hover:bg-mohi-light-blue">Issue Loan</button>
-        </form>
-        <!-- Add User Button -->
-        <button id="add-user-btn" class="mt-4 bg-mohi-yellow-orange text-white p-2 rounded w-full hover:bg-mohi-light-blue transition duration-200">Add New User</button>
+        </div>
 
-        <!-- Modal for Adding User -->
-        <div id="add-user-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden items-center justify-center z-50">
-            <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
-                <h2 class="text-xl font-bold mb-4 text-mohi-deep-blue">Add New User</h2>
-                <form id="add-user-form" method="post" action="{% url 'register' %}" class="space-y-4">
-                    {% csrf_token %}
-                    <div>
-                        <label for="first_name" class="block text-gray-700 text-sm font-medium">First Name</label>
-                        <input type="text" name="first_name" id="first_name" class="w-full p-2 border rounded mt-1" required>
-                    </div>
-                    <div>
-                        <label for="last_name" class="block text-gray-700 text-sm font-medium">Last Name</label>
-                        <input type="text" name="last_name" id="last_name" class="w-full p-2 border rounded mt-1" required>
-                    </div>
-                    <div>
-                        <label for="email" class="block text-gray-700 text-sm font-medium">Email</label>
-                        <input type="email" name="email" id="email" class="w-full p-2 border rounded mt-1" required>
-                    </div>
-                    <div>
-                        <label for="department" class="block text-gray-700 text-sm font-medium">Department</label>
-                        <input type="text" name="department" id="department" class="w-full p-2 border rounded mt-1" required>
-                    </div>
-                    <div>
-                        <label for="designation" class="block text-gray-700 text-sm font-medium">Designation</label>
-                        <input type="text" name="designation" id="designation" class="w-full p-2 border rounded mt-1" required>
-                    </div>
-                    <div>
-                        <label for="password" class="block text-gray-700 text-sm font-medium">Password</label>
-                        <input type="password" name="password" id="password" class="w-full p-2 border rounded mt-1" required>
-                    </div>
-                    <div class="flex justify-end space-x-4">
-                        <button type="button" id="close-modal" class="bg-gray-500 text-white p-2 rounded hover:bg-gray-700">Cancel</button>
-                        <button type="submit" class="bg-mohi-green text-white p-2 rounded hover:bg-mohi-light-blue">Add User</button>
-                    </div>
-                </form>
+        <!-- Loan Form Card -->
+        <div class="bg-white p-6 rounded-lg shadow-lg w-full md:w-3/4">
+            <h1 class="text-2xl font-bold mb-4 text-mohi-deep-blue">Issue Loan</h1>
+            {% if error %}
+                <p class="text-red-500 mb-4">{{ error }}</p>
+            {% endif %}
+            <form method="post" class="space-y-4">
+                {% csrf_token %}
+                <div class="mb-4">
+                    <label for="user_id" class="block text-gray-700">Select User</label>
+                    <select name="user_id" id="user_id" class="user-select w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-mohi-light-blue" required>
+                        <option></option>
+                        {% for u in users %}
+                            <option value="{{ u.id }}">{{ u.email }} ({{ u.first_name }} {{ u.last_name }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="mb-4">
+                    <label for="amount" class="block text-gray-700">Loan Amount (ksh)</label>
+                    <input type="number" id="amount" name="amount" class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-mohi-light-blue" step="0.01" value="1000.00" required>
+                </div>
+                <div class="mb-4">
+                    <label for="term_months" class="block text-gray-700">Term (Months)</label>
+                    <input type="number" id="term_months" name="term_months" class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-mohi-light-blue" value="7" required>
+                </div>
+                <button type="submit" class="bg-mohi-green text-white p-2 rounded w-full hover:bg-mohi-light-blue transition duration-200 transform hover:scale-105">Issue Loan</button>
+            </form>
+            <!-- Add User Button -->
+            <button id="add-user-btn" class="mt-4 bg-mohi-yellow-orange text-white p-2 rounded w-full hover:bg-mohi-light-blue transition duration-200 transform hover:scale-105">Add New User</button>
+        </div>
+    </div>
+
+    <!-- Modal for Adding User -->
+    <div id="add-user-modal" class="fixed inset-0 bg-gray-600 bg-opacity-75 hidden flex items-center justify-center z-50">
+        <div class="bg-white p-6 rounded-lg shadow-lg w-full h-full max-w-2xl mx-auto overflow-y-auto">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold text-mohi-deep-blue">Add New User</h2>
+                <button id="close-modal" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
             </div>
+            <form id="add-user-form" method="post" action="{% url 'register' %}" class="space-y-4">
+                {% csrf_token %}
+                <div>
+                    <label for="first_name" class="block text-gray-700 text-sm font-medium">First Name</label>
+                    <input type="text" name="first_name" id="first_name" class="w-full p-2 border rounded mt-1 focus:outline-none focus:ring-2 focus:ring-mohi-light-blue" required>
+                </div>
+                <div>
+                    <label for="last_name" class="block text-gray-700 text-sm font-medium">Last Name</label>
+                    <input type="text" name="last_name" id="last_name" class="w-full p-2 border rounded mt-1 focus:outline-none focus:ring-2 focus:ring-mohi-light-blue" required>
+                </div>
+                <div>
+                    <label for="email" class="block text-gray-700 text-sm font-medium">Email</label>
+                    <input type="email" name="email" id="email" class="w-full p-2 border rounded mt-1 focus:outline-none focus:ring-2 focus:ring-mohi-light-blue" required>
+                </div>
+                <div>
+                    <label for="department" class="block text-gray-700 text-sm font-medium">Department</label>
+                    <input type="text" name="department" id="department" class="w-full p-2 border rounded mt-1 focus:outline-none focus:ring-2 focus:ring-mohi-light-blue" required>
+                </div>
+                <div>
+                    <label for="designation" class="block text-gray-700 text-sm font-medium">Designation</label>
+                    <input type="text" name="designation" id="designation" class="w-full p-2 border rounded mt-1 focus:outline-none focus:ring-2 focus:ring-mohi-light-blue" required>
+                </div>
+                <div>
+                    <label for="password" class="block text-gray-700 text-sm font-medium">Password</label>
+                    <input type="password" name="password" id="password" class="w-full p-2 border rounded mt-1 focus:outline-none focus:ring-2 focus:ring-mohi-light-blue" required>
+                </div>
+                <div class="flex justify-end space-x-4">
+                    <button type="button" id="close-modal-form" class="bg-gray-500 text-white p-2 rounded hover:bg-gray-700 transition duration-200 transform hover:scale-105">Cancel</button>
+                    <button type="submit" class="bg-mohi-green text-white p-2 rounded hover:bg-mohi-light-blue transition duration-200 transform hover:scale-105">Add User</button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
 
-<!-- JavaScript for Modal -->
+<!-- jQuery (required for Select2) -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
+<!-- Select2 CSS & JS -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+<!-- JavaScript for Modal and Interactivity -->
+<script src="https://kit.fontawesome.com/a076d05399.js" crossorigin="anonymous"></script>
 <script>
+    // Initialize Select2 for user select
+    $(document).ready(function() {
+        $('#user_id').select2({
+            placeholder: 'Search for a user...',
+            allowClear: true,
+            width: '100%'
+        });
+    });
+
     document.getElementById('add-user-btn').addEventListener('click', function() {
         document.getElementById('add-user-modal').classList.remove('hidden');
     });
 
-    document.getElementById('close-modal').addEventListener('click', function() {
-        document.getElementById('add-user-modal').classList.add('hidden');
+    document.querySelectorAll('#close-modal, #close-modal-form').forEach(button => {
+        button.addEventListener('click', function() {
+            document.getElementById('add-user-modal').classList.add('hidden');
+        });
     });
 
-    // Handle form submission and close modal on success
     document.getElementById('add-user-form').addEventListener('submit', function(event) {
         event.preventDefault();
         fetch(this.action, {
@@ -137,5 +140,18 @@
             }
         });
     });
+
+    // Handle ESC key to close modal
+    document.addEventListener('keydown', function(event) {
+        if (event.key === 'Escape') {
+            document.getElementById('add-user-modal').classList.add('hidden');
+        }
+    });
 </script>
+<style>
+    .focus-ring-mohi-light-blue:focus {
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(74, 144, 226, 0.5);
+    }
+</style>
 {% endblock %}
