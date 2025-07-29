@@ -58,6 +58,10 @@ class CustomUser(AbstractUser):
 
 
 
+from decimal import Decimal
+from datetime import datetime, timedelta
+from django.utils import timezone
+
 class Loan(models.Model):
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
     amount = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'))
@@ -69,28 +73,72 @@ class Loan(models.Model):
     is_paid = models.BooleanField(default=False)
 
     def generate_amortization_schedule(self, original=False):
+        """
+        Generate amortization schedule for the loan, matching calculate_loan logic.
+        Args:
+            original (bool): If True, generate based on original terms; if False, adjust for repayments.
+        Returns:
+            list: Amortization schedule with month, date, payment, interest, principal, balance.
+        """
+        principal = self.amount if original else self.balance
+        monthly_rate = Decimal('1.0')  # Fixed 1% monthly interest rate to match calculate_loan
+        months = self.term_months
+        r = monthly_rate / Decimal('100')  # Convert to decimal (1% = 0.01)
+        
+        # Calculate monthly payment
+        if r == 0:
+            monthly_payment = principal / months
+        else:
+            monthly_payment = principal * (r * (1 + r) ** months) / ((1 + r) ** months - 1)
+        
+        balance = principal
         schedule = []
-        balance = self.amount if original else self.balance
-        monthly_rate = self.interest_rate / 100 / 12
-        monthly_payment = (self.amount * monthly_rate * (1 + monthly_rate) ** self.term_months) / ((1 + monthly_rate) ** self.term_months - 1)
-        current_date = self.start_date
-        remaining_balance = balance
-
-        for month in range(1, self.term_months + 1):
-            interest = remaining_balance * monthly_rate
-            principal = min(monthly_payment - interest, remaining_balance)
-            remaining_balance -= principal
-            if original:
-                remaining_balance = max(0, self.amount - (month - 1) * principal)  # Simulate original declining balance
+        start_date = self.start_date or timezone.now().date()
+        
+        # Adjust for repayments if not original
+        if not original:
+            repayments = Repayment.objects.filter(loan=self).order_by('date')
+            repaid_principal = sum(rep.principal for rep in repayments) or Decimal('0.00')
+            balance = max(Decimal('0.00'), principal - repaid_principal)
+            # Skip months already paid
+            paid_months = repayments.count()
+        else:
+            paid_months = 0
+        
+        # Generate schedule
+        for month in range(1 + paid_months, months + 1):
+            interest = balance * r
+            principal_paid = monthly_payment - interest
+            balance -= principal_paid
+            
+            if balance < 0:
+                principal_paid += balance
+                balance = 0
+            
             schedule.append({
                 'month': month,
-                'date': current_date,
-                'payment': monthly_payment,
-                'interest': interest,
-                'principal': principal,
-                'balance': remaining_balance
+                'date': start_date + timedelta(days=30 * (month - 1)),
+                'payment': float(round(monthly_payment, 2)),
+                'interest': float(round(interest, 2)),
+                'principal': float(round(principal_paid, 2)),
+                'balance': float(round(balance, 2))
             })
-            current_date += timedelta(days=30)  # Approximate 1 month
+            
+            if balance <= 0:
+                break
+        
+        # Handle final payment
+        if balance > 0:
+            final_payment = balance + (balance * r)
+            schedule.append({
+                'month': len(schedule) + 1,
+                'date': start_date + timedelta(days=30 * len(schedule)),
+                'payment': float(round(final_payment, 2)),
+                'interest': float(round(balance * r, 2)),
+                'principal': float(round(balance, 2)),
+                'balance': 0.0
+            })
+        
         return schedule
 
     def get_status_display(self):
